@@ -11,7 +11,7 @@ bl_info = {
     "location": "File > Import-Export",
     "description": "MDL scene exporter",
     "warning": "",
-    "support": 'OFFICIAL',
+    "support": 'COMMUNITY',
     "category": "Import-Export"
 }
 
@@ -22,11 +22,21 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
     filename_ext = ".mdl"
 
     def execute(self, context):
-        print("execute")
-        return {'FINISHED'}
+        f = open(self.filepath, "w")
+        
+        for mesh in bpy.data.meshes:
+            for face in mesh.polygons:
+                if len(face.vertices) > 3:
+                    self.report({"ERROR"}, "Mesh has non-triangular polygons")
+                    return {"CANCELLED"}
+                for i in range(0, 3):
+                    v = face.vertices[i]
+                    
+                    f.write("v (({}, {}, {}), ({}, {}, {}), ({}, {}))".format())
 
-    def draw(self, context):
-        pass
+        f.close()
+
+        return {"FINISHED"}
 
 def menu_func_export(self, context):
     self.layout.operator(MDL_Exporter.bl_idname, text="MDL Exporter (.mdl)")    
