@@ -1,2 +1,2 @@
 
-cp ./scripts/startup/mdl_exporter.py /Applications/Blender.app/Contents/Resources/2.81/scripts/startup/mdl_exporter.py
+cp "./scripts/startup/mdl_exporter.py" "/mnt/c/Users/Jas/Programs/Blender 2.82/2.82/scripts/startup/mdl_exporter.py"
