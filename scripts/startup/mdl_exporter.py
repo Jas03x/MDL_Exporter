@@ -2,6 +2,7 @@
 import bpy
 from bpy.props import (BoolProperty, FloatProperty, StringProperty, EnumProperty)
 from bpy_extras.io_utils import (ImportHelper, ExportHelper, orientation_helper, path_reference_mode, axis_conversion)
+from mathutils import Matrix
 
 bl_info = {
     "name": "MDL format",
@@ -74,6 +75,61 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
             for bone in armature.bones:
                 bone_map[bone.name] = len(bone_list)
                 bone_list.append(MDL_Bone(bone.name))
+
+        obj_map = {}
+        for obj in bpy.data.objects:
+            f.write("node {}:\n".format(obj.name))
+            obj_map[obj.name] = obj
+            matrix = obj.matrix_world.transposed()
+            for i in range(4):
+                f.write("[{0:.6f}, {1:.6f}, {2:.6f}, {3:.6f}]\n".format(matrix[i][0], matrix[i][1], matrix[i][2], matrix[i][3]))
+            f.write("\n")
+        
+        for armature in bpy.data.armatures:
+            for bone in armature.bones:
+                f.write("node {}:\n".format(bone.name))
+
+                matrix = None
+                if bone.parent is None:
+                    matrix = bone.matrix_local
+                else:
+                    matrix = bone.parent.matrix_local.inverted()
+                    matrix = matrix @ bone.matrix_local
+                matrix = matrix.transposed()
+
+                for i in range(4):
+                    f.write("[{0:.6f}, {1:.6f}, {2:.6f}, {3:.6f}]\n".format(matrix[i][0], matrix[i][1], matrix[i][2], matrix[i][3]))
+                f.write("\n")
+
+        for armature in bpy.data.armatures:
+            armature_matrix = obj_map[armature.name].matrix_world
+
+            children = obj_map[armature.name].children
+            if len(children) != 1:
+                self.report({"ERROR"}, "Armature has invalid number of children")
+                return {"CANCELLED"}
+
+            f.write("{} - {}\n".format(children[0].matrix_world.to_translation(), obj_map[armature.name].matrix_world.to_translation()))
+            offset = children[0].matrix_world.to_translation() - obj_map[armature.name].matrix_world.to_translation()
+            bind_shape_matrix = Matrix()
+            bind_shape_matrix[0] = [1, 0, 0, 0]
+            bind_shape_matrix[1] = [0, 0, 1, 0]
+            bind_shape_matrix[2] = [0, -1, 0, 0]
+            bind_shape_matrix[3] = [offset[0], offset[1], offset[2], 1]
+
+            f.write("bind shape matrix:\n")
+            for i in range(4):
+                f.write("[{0:.6f}, {1:.6f}, {2:.6f}, {3:.6f}]\n".format(bind_shape_matrix[i][0], bind_shape_matrix[i][1], bind_shape_matrix[i][2], bind_shape_matrix[i][3]))
+            f.write("\n")
+
+            for bone in armature.bones:
+                f.write("bone {}:\n".format(bone.name))
+                matrix = armature_matrix @ bone.matrix_local
+                matrix.invert()
+                matrix.transpose()
+                for i in range(4):
+                    f.write("[{0:.6f}, {1:.6f}, {2:.6f}, {3:.6f}]\n".format(matrix[i][0], matrix[i][1], matrix[i][2], matrix[i][3]))
+                f.write("\n")
         
         for mesh in bpy.data.meshes:
             uv_layer = mesh.uv_layers.active.data
@@ -107,7 +163,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                         vertex_list.append(vertex)
                     indices.append(index)
             for vertex in vertex_list:
-                f.write("({0:.8f}, {1:.8f}, {2:.8f}), ({3:.8f}, {4:.8f}, {5:.8f}), ({6:.8f}, {7:.8f}), ({8:.8f}, {9:.8f}, {10:.8f}, {11:.8f}), ({12:.8f}, {13:.8f}, {14:.8f}, {15:.8f}), {16:.8f}\n".format(
+                f.write("({0:.6f}, {1:.6f}, {2:.6f}), ({3:.6f}, {4:.6f}, {5:.6f}), ({6:.6f}, {7:.6f}), ({8:.6f}, {9:.6f}, {10:.6f}, {11:.6f}), ({12:.6f}, {13:.6f}, {14:.6f}, {15:.6f}), {16:.6f}\n".format(
                     vertex.position[0], vertex.position[1], vertex.position[2],
                     vertex.normal[0], vertex.normal[1], vertex.normal[2],
                     vertex.uv[0], vertex.uv[1],
