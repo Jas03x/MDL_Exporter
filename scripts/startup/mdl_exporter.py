@@ -38,17 +38,43 @@ class MDL_Vertex:
     def __hash__(self):
         return self.hash_value
 
-class MDL_Bone:
-    def __init__(self, name):
-        self.name = name
-
 class MDL_Node:
-    def __init__(self, name, parent, location, rotation, scale):
+    def __init__(self, name, parent, transform):
         self.name = name
         self.parent = parent
-        self.location = location
-        self.rotation = rotation
-        self.scale = scale
+        self.transform = transform
+
+class MDL_Bone:
+    def __init__(self, name, node_index, offset_matrix):
+        self.name = name
+        self.node_index = node_index
+        self.offset_matrix = offset_matrix
+
+class Index:
+    def __init__(self):
+        self.map = {}
+        self.array = []
+
+    def add(self, key, value):
+        if self.map.get(key) != None:
+            raise Exception("item already exists in index")
+        i = len(self.array)
+        self.map[key] = i
+        self.array.append(value)
+        return i
+
+    def get(self, key):
+        i = self.get_index(key)
+        return None if i == -1 else self.array[i]
+    
+    def get_index(self, key):
+        return self.map.get(key, -1)
+
+def write_matrix(f, text, matrix):
+    f.write("{}\n".format(text))
+    for i in range(4):
+        f.write("[{0:.6f}, {1:.6f}, {2:.6f}, {3:.6f}]\n".format(matrix[i][0], matrix[i][1], matrix[i][2], matrix[i][3]))
+    f.write("\n")
 
 class MDL_Exporter(bpy.types.Operator, ExportHelper):
     bl_idname = "export_scene.mdl"
@@ -59,78 +85,71 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
     def execute(self, context):
         f = open(self.filepath, "w")
 
-        bone_map  = {}
-        bone_list = []
-        node_map  = {}
-        node_list = []
+        bone_index = Index()
+        node_index = Index()
 
         for obj in bpy.data.objects:
             if obj.rotation_mode != 'XYZ':
                 self.report({"ERROR"}, "Invalid rotation mode")
                 return {"CANCELLED"}
-            node_map[obj.name] = len(node_list)
-            node_list.append(MDL_Node(obj.name, -1 if obj.parent == None else node_map[obj.parent.name], obj.location, obj.rotation_euler, obj.scale))
 
-        for armature in bpy.data.armatures:
-            for bone in armature.bones:
-                bone_map[bone.name] = len(bone_list)
-                bone_list.append(MDL_Bone(bone.name))
-
-        obj_map = {}
-        for obj in bpy.data.objects:
-            f.write("node {}:\n".format(obj.name))
-            obj_map[obj.name] = obj
-            matrix = obj.matrix_world.transposed()
-            for i in range(4):
-                f.write("[{0:.6f}, {1:.6f}, {2:.6f}, {3:.6f}]\n".format(matrix[i][0], matrix[i][1], matrix[i][2], matrix[i][3]))
-            f.write("\n")
-        
-        for armature in bpy.data.armatures:
-            for bone in armature.bones:
-                f.write("node {}:\n".format(bone.name))
-
-                matrix = None
-                if bone.parent is None:
-                    matrix = bone.matrix_local
-                else:
-                    matrix = bone.parent.matrix_local.inverted()
-                    matrix = matrix @ bone.matrix_local
-                matrix = matrix.transposed()
-
-                for i in range(4):
-                    f.write("[{0:.6f}, {1:.6f}, {2:.6f}, {3:.6f}]\n".format(matrix[i][0], matrix[i][1], matrix[i][2], matrix[i][3]))
-                f.write("\n")
-
-        for armature in bpy.data.armatures:
-            armature_matrix = obj_map[armature.name].matrix_world
-
-            children = obj_map[armature.name].children
-            if len(children) != 1:
-                self.report({"ERROR"}, "Armature has invalid number of children")
+            p_index = -1 if obj.parent is None else node_index.get_index(obj.parent.name)
+            if (obj.parent != None) and (p_index == -1):
+                self.report({"ERROR"}, "Parent not found")
                 return {"CANCELLED"}
+            node_index.add(obj.name, MDL_Node(obj.name, p_index, obj.matrix_local.transposed()))
 
-            f.write("{} - {}\n".format(children[0].matrix_world.to_translation(), obj_map[armature.name].matrix_world.to_translation()))
-            offset = children[0].matrix_world.to_translation() - obj_map[armature.name].matrix_world.to_translation()
-            bind_shape_matrix = Matrix()
-            bind_shape_matrix[0] = [1, 0, 0, 0]
-            bind_shape_matrix[1] = [0, 0, 1, 0]
-            bind_shape_matrix[2] = [0, -1, 0, 0]
-            bind_shape_matrix[3] = [offset[0], offset[1], offset[2], 1]
-
-            f.write("bind shape matrix:\n")
-            for i in range(4):
-                f.write("[{0:.6f}, {1:.6f}, {2:.6f}, {3:.6f}]\n".format(bind_shape_matrix[i][0], bind_shape_matrix[i][1], bind_shape_matrix[i][2], bind_shape_matrix[i][3]))
-            f.write("\n")
-
-            for bone in armature.bones:
-                f.write("bone {}:\n".format(bone.name))
-                matrix = armature_matrix @ bone.matrix_local
-                matrix.invert()
-                matrix.transpose()
-                for i in range(4):
-                    f.write("[{0:.6f}, {1:.6f}, {2:.6f}, {3:.6f}]\n".format(matrix[i][0], matrix[i][1], matrix[i][2], matrix[i][3]))
-                f.write("\n")
+        armature = None
+        num_armatures = len(bpy.data.armatures)
         
+        if num_armatures == 1:
+            armature = bpy.data.armatures[0]
+        elif num_armatures > 1:
+            self.report({"ERROR"}, "More than one armature present")
+            return {"CANCELLED"}
+
+        if armature != None:
+            armature_matrix = bpy.data.objects[armature.name].matrix_world
+            for bone in armature.bones:
+                matrix_local = bone.matrix_local
+                if bone.parent != None:
+                    # bone.matrix_local is relative to the armature - multiply by the parent bone's inverse
+                    matrix_local = bone.parent.matrix_local.inverted() @ matrix_local
+                p_index = -1 if bone.parent is None else node_index.get_index(bone.parent.name)
+                n_index = node_index.add(bone.name, MDL_Node(bone.name, p_index, matrix_local.transposed()))
+
+                offset_matrix = armature_matrix @ bone.matrix_local
+                offset_matrix.invert()
+                offset_matrix.transpose()
+                bone_index.add(bone.name, MDL_Bone(bone.name, n_index, offset_matrix))
+        
+        for node in node_index.array:
+            write_matrix(f, "node {}:".format(node.name), node.transform)
+        for bone in bone_index.array:
+            write_matrix(f, "bone {}:".format(bone.name), bone.offset_matrix)
+        
+        for mesh in bpy.data.meshes:
+            mesh_node = node_index.get(mesh.name)
+            mesh_parent = None if (mesh_node.parent == -1) else node_index.array[mesh_node.parent]
+            
+            mesh_armature = None
+            if (armature != None) and (mesh_parent != None) and (mesh_parent.name == armature.name):
+                mesh_armature = armature
+            
+            bind_shape_matrix = Matrix.Identity(4)
+            if mesh_armature != None:
+                skin_offset = bpy.data.objects[mesh.name].matrix_world.to_translation()
+                skeleton_offset = bpy.data.objects[armature.name].matrix_world.to_translation()
+                offset = skin_offset - skeleton_offset
+                
+                bind_shape_matrix = Matrix()
+                bind_shape_matrix[0] = [1, 0, 0, 0]
+                bind_shape_matrix[1] = [0, 0, 1, 0]
+                bind_shape_matrix[2] = [0, -1, 0, 0]
+                bind_shape_matrix[3] = [offset[0], offset[1], offset[2], 1]
+            write_matrix(f, "bind shape matrix:", bind_shape_matrix)
+
+        '''
         for mesh in bpy.data.meshes:
             uv_layer = mesh.uv_layers.active.data
 
@@ -172,6 +191,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                     vertex.bone_count
                 ))
             f.write("SAVED {} WRITES\n".format(len(indices) - len(vertex_list)))
+        '''
 
         f.close()
         
