@@ -12,7 +12,7 @@ bl_info = {
     "location": "File > Import-Export",
     "description": "MDL scene exporter",
     "warning": "",
-    "support": 'COMMUNITY',
+    "support": "COMMUNITY",
     "category": "Import-Export"
 }
 
