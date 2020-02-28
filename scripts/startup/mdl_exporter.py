@@ -64,9 +64,9 @@ class Index:
         return i
 
     def get(self, key):
-        return self.array[self.get_index(key)]
+        return self.array[self.find(key)]
     
-    def get_index(self, key):
+    def find(self, key):
         index = self.map.get(key, -1)
         if index == -1:
             raise Exception("item {} does not exist in index".format(key))
@@ -100,7 +100,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         for obj in bpy.data.objects:
             p_index = -1
             if obj.parent != None:
-                p_index = data.node_index.get_index(obj.parent.name)
+                p_index = data.node_index.find(obj.parent.name)
             data.node_index.add(obj.name, MDL_Node(obj.name, p_index, obj.matrix_local.transposed()))
 
         armature = None
@@ -120,7 +120,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                     # bone.matrix_local is relative to the armature - multiply by the parent bone's inverse
                     matrix_local = bone.parent.matrix_local.inverted() @ matrix_local
                     bone_parent = bone.parent.name
-                p_index = data.node_index.get_index(bone_parent)
+                p_index = data.node_index.find(bone_parent)
                 n_index = data.node_index.add(bone.name, MDL_Node(bone.name, p_index, matrix_local.transposed()))
 
                 offset_matrix = armature_matrix @ bone.matrix_local
@@ -132,6 +132,12 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
             write_matrix(f, "node {}:".format(node.name), node.transform)
         for bone in data.bone_index.array:
             write_matrix(f, "bone {}:".format(bone.name), bone.offset_matrix)
+        
+        texture = bpy.data.images.get("Texture")
+        if texture != None:
+            f.write("texture path: {}\n".format(texture.filepath))
+        else:
+            raise Exception("texture not found")
 
         for mesh in bpy.data.meshes:
             mesh_object = bpy.data.objects[mesh.name]
@@ -153,7 +159,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
 
             vertex_group_map = [] # maps the group index to the bone index
             for group in bpy.data.objects[mesh.name].vertex_groups:
-                vertex_group_map.append(data.bone_index.get_index(group.name))
+                vertex_group_map.append(data.bone_index.find(group.name))
 
             for face in mesh.polygons:
                 if face.loop_total != 3:
