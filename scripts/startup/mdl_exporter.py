@@ -57,7 +57,7 @@ class Index:
 
     def add(self, key, value):
         if self.map.get(key) != None:
-            raise Exception("item already exists in index")
+            raise Exception("item {} already exists in index".format(key))
         i = len(self.array)
         self.map[key] = i
         self.array.append(value)
@@ -69,7 +69,7 @@ class Index:
     def get_index(self, key):
         index = self.map.get(key, -1)
         if index == -1:
-            raise Exception("item does not exist in index")
+            raise Exception("item {} does not exist in index".format(key))
         return index
 
 class MDL_Model:
@@ -92,7 +92,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
 
     filename_ext = ".mdl"
 
-    def execute(self, context):
+    def process(self):
         f = open(self.filepath, "w")
 
         data = MDL_Model()
@@ -109,8 +109,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         if num_armatures == 1:
             armature = bpy.data.armatures[0]
         elif num_armatures > 1:
-            self.report({"ERROR"}, "More than one armature present")
-            return {"CANCELLED"}
+            raise Exception("more than one armature present")
 
         if armature != None:
             armature_matrix = bpy.data.objects[armature.name].matrix_world
@@ -158,13 +157,11 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
 
             for face in mesh.polygons:
                 if face.loop_total != 3:
-                    self.report({"ERROR"}, "Mesh has non-triangular polygons")
-                    return {"CANCELLED"}
+                    raise Exception("mesh has non-triangular polygons")
                 for i in range(face.loop_start, face.loop_start + face.loop_total):
                     v = mesh.vertices[mesh.loops[i].vertex_index]
                     if len(v.groups) > 4:
-                        self.report({"ERROR"}, "A vertex has more than 4 bones")
-                        return {"CANCELLED"}
+                        raise Exception("a vertex has more than 4 bones")
                     vertex = MDL_Vertex(bind_shape_matrix @ v.co, v.normal, uv_layer[i].uv)
                     for g in v.groups:
                         vertex.bone_indices[vertex.bone_count] = vertex_group_map[g.group]
@@ -189,9 +186,14 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                 vertex.bone_count
             ))
         f.write("SAVED {} WRITES\n".format(len(data.index_array) - len(data.vertex_set)))
-
         f.close()
-        
+
+    def execute(self, context):
+        try:
+            self.process()
+        except Exception as error:
+            self.report({"ERROR"}, str(error))
+            return {"CANCELLED"}
         return {"FINISHED"}
 
 def menu_func_export(self, context):
