@@ -64,11 +64,21 @@ class Index:
         return i
 
     def get(self, key):
-        i = self.get_index(key)
-        return None if i == -1 else self.array[i]
+        return self.array[self.get_index(key)]
     
     def get_index(self, key):
-        return self.map.get(key, -1)
+        index = self.map.get(key, -1)
+        if index == -1:
+            raise Exception("item does not exist in index")
+        return index
+
+class MDL_Model:
+    def __init__(self):
+        self.vertex_set = []
+        self.vertex_map = {}
+        self.index_array = []
+        self.bone_index = Index()
+        self.node_index = Index()
 
 def write_matrix(f, text, matrix):
     f.write("{}\n".format(text))
@@ -85,15 +95,13 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
     def execute(self, context):
         f = open(self.filepath, "w")
 
-        bone_index = Index()
-        node_index = Index()
+        data = MDL_Model()
 
         for obj in bpy.data.objects:
-            p_index = -1 if obj.parent is None else node_index.get_index(obj.parent.name)
-            if (obj.parent != None) and (p_index == -1):
-                self.report({"ERROR"}, "Parent not found")
-                return {"CANCELLED"}
-            node_index.add(obj.name, MDL_Node(obj.name, p_index, obj.matrix_local.transposed()))
+            p_index = -1
+            if obj.parent != None:
+                p_index = data.node_index.get_index(obj.parent.name)
+            data.node_index.add(obj.name, MDL_Node(obj.name, p_index, obj.matrix_local.transposed()))
 
         armature = None
         num_armatures = len(bpy.data.armatures)
@@ -108,33 +116,27 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
             armature_matrix = bpy.data.objects[armature.name].matrix_world
             for bone in armature.bones:
                 matrix_local = bone.matrix_local
+                bone_parent = armature.name
                 if bone.parent != None:
                     # bone.matrix_local is relative to the armature - multiply by the parent bone's inverse
                     matrix_local = bone.parent.matrix_local.inverted() @ matrix_local
-                p_index = -1 if bone.parent is None else node_index.get_index(bone.parent.name)
-                n_index = node_index.add(bone.name, MDL_Node(bone.name, p_index, matrix_local.transposed()))
+                    bone_parent = bone.parent.name
+                p_index = data.node_index.get_index(bone_parent)
+                n_index = data.node_index.add(bone.name, MDL_Node(bone.name, p_index, matrix_local.transposed()))
 
                 offset_matrix = armature_matrix @ bone.matrix_local
                 offset_matrix.invert()
                 offset_matrix.transpose()
-                bone_index.add(bone.name, MDL_Bone(bone.name, n_index, offset_matrix))
+                data.bone_index.add(bone.name, MDL_Bone(bone.name, n_index, offset_matrix))
         
-        for node in node_index.array:
+        for node in data.node_index.array:
             write_matrix(f, "node {}:".format(node.name), node.transform)
-        for bone in bone_index.array:
+        for bone in data.bone_index.array:
             write_matrix(f, "bone {}:".format(bone.name), bone.offset_matrix)
-        
-        vertex_set = []
-        vertex_map = {}
-        index_array = []
 
         for mesh in bpy.data.meshes:
-            mesh_node = node_index.get(mesh.name)
-            mesh_parent = None if (mesh_node.parent == -1) else node_index.array[mesh_node.parent]
-            
-            mesh_armature = None
-            if (armature != None) and (mesh_parent != None) and (mesh_parent.name == armature.name):
-                mesh_armature = armature
+            mesh_object = bpy.data.objects[mesh.name]
+            mesh_armature = mesh_object.find_armature()
             
             bind_shape_matrix = Matrix.Identity(4)
             if mesh_armature != None:
@@ -152,7 +154,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
 
             vertex_group_map = [] # maps the group index to the bone index
             for group in bpy.data.objects[mesh.name].vertex_groups:
-                vertex_group_map.append(bone_index.get_index(group.name))
+                vertex_group_map.append(data.bone_index.get_index(group.name))
 
             for face in mesh.polygons:
                 if face.loop_total != 3:
@@ -170,13 +172,14 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                         vertex.bone_count += 1
                     vertex.finalize()
 
-                    index = vertex_map.get(vertex, -1)
+                    index = data.vertex_map.get(vertex, -1)
                     if index == -1:
-                        vertex_map[vertex] = len(vertex_set)
-                        vertex_set.append(vertex)
-                    index_array.append(index)
+                        index = len(data.vertex_set)
+                        data.vertex_map[vertex] = index
+                        data.vertex_set.append(vertex)
+                    data.index_array.append(index)
             
-        for vertex in vertex_set:
+        for vertex in data.vertex_set:
             f.write("({0:.6f}, {1:.6f}, {2:.6f}), ({3:.6f}, {4:.6f}, {5:.6f}), ({6:.6f}, {7:.6f}), ({8:.6f}, {9:.6f}, {10:.6f}, {11:.6f}), ({12:.6f}, {13:.6f}, {14:.6f}, {15:.6f}), {16:.6f}\n".format(
                 vertex.position[0], vertex.position[1], vertex.position[2],
                 vertex.normal[0], vertex.normal[1], vertex.normal[2],
@@ -185,7 +188,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                 vertex.bone_weights[0], vertex.bone_weights[1], vertex.bone_weights[2], vertex.bone_weights[3],
                 vertex.bone_count
             ))
-        f.write("SAVED {} WRITES\n".format(len(index_array) - len(vertex_set)))
+        f.write("SAVED {} WRITES\n".format(len(data.index_array) - len(data.vertex_set)))
 
         f.close()
         
