@@ -68,12 +68,16 @@ class Index:
         if index == -1:
             raise Exception("item {} does not exist in index".format(key))
         return index
+    
+class MDL_Mesh:
+    def __init__(self):
+        self.index_array = []
 
 class MDL_Model:
     def __init__(self):
         self.vertex_set = []
         self.vertex_map = {}
-        self.index_array = []
+        self.mesh_array = []
         self.bone_index = Index()
         self.node_index = Index()
 
@@ -154,6 +158,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
             for group in bpy.data.objects[mesh.name].vertex_groups:
                 vertex_group_map.append(data.bone_index.find(group.name))
 
+            mesh = MDL_Mesh()
             for face in mesh.polygons:
                 if face.loop_total != 3:
                     raise Exception("mesh has non-triangular polygons")
@@ -173,7 +178,9 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                         index = len(data.vertex_set)
                         data.vertex_map[vertex] = index
                         data.vertex_set.append(vertex)
-                    data.index_array.append(index)
+                    mesh.index_array.append(index)
+            
+            data.mesh_array.append(mesh)
             
         for vertex in data.vertex_set:
             f.write("({0:.6f}, {1:.6f}, {2:.6f}), ({3:.6f}, {4:.6f}, {5:.6f}), ({6:.6f}, {7:.6f}), ({8:.6f}, {9:.6f}, {10:.6f}, {11:.6f}), ({12:.6f}, {13:.6f}, {14:.6f}, {15:.6f}), {16:.6f}\n".format(
