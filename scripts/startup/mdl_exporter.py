@@ -17,10 +17,11 @@ bl_info = {
 }
 
 class MDL_Vertex:
-    def __init__(self, p, n, uv):
+    def __init__(self, p, n, uv, node_index):
         self.position = tuple(p)
         self.normal = tuple(n)
         self.uv = tuple(uv)
+        self.node_index = node_index
         self.bone_indices = [0, 0, 0, 0]
         self.bone_weights = [0, 0, 0, 0]
         self.bone_count = 0
@@ -29,10 +30,10 @@ class MDL_Vertex:
     def finalize(self):
         self.bone_indices = tuple(self.bone_indices)
         self.bone_weights = tuple(self.bone_weights)
-        self.hash_value = hash((self.position, self.normal, self.uv, self.bone_indices, self.bone_weights, self.bone_count))
+        self.hash_value = hash((self.position, self.normal, self.uv, self.node_index, self.bone_indices, self.bone_weights, self.bone_count))
 
     def __eq__(self, other):
-        return (self.position == other.position) and (self.normal == other.normal) and (self.uv == other.uv) and \
+        return (self.position == other.position) and (self.normal == other.normal) and (self.uv == other.uv) and (self.node_index == other.node_index) \
             (self.bone_indices == other.bone_indices) and (self.bone_weights == other.bone_weights) and (self.bone_count == other.bone_count)
 
     def __hash__(self):
@@ -160,6 +161,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                 vertex_group_map.append(data.bone_index.find(group.name))
 
             mesh_data = MDL_Mesh(mesh.name)
+            node_index = data.node_index.find(mesh.name)
             for face in mesh.polygons:
                 if face.loop_total != 3:
                     raise Exception("mesh has non-triangular polygons")
@@ -167,7 +169,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                     v = mesh.vertices[mesh.loops[i].vertex_index]
                     if len(v.groups) > 4:
                         raise Exception("a vertex has more than 4 bones")
-                    vertex = MDL_Vertex(bind_shape_matrix @ v.co, v.normal, uv_layer[i].uv)
+                    vertex = MDL_Vertex(bind_shape_matrix @ v.co, v.normal, uv_layer[i].uv, node_index)
                     for g in v.groups:
                         vertex.bone_indices[vertex.bone_count] = vertex_group_map[g.group]
                         vertex.bone_weights[vertex.bone_count] = g.weight
