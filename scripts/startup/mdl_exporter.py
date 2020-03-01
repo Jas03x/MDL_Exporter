@@ -45,9 +45,8 @@ class MDL_Node:
         self.transform = transform
 
 class MDL_Bone:
-    def __init__(self, name, node_index, offset_matrix):
+    def __init__(self, name, offset_matrix):
         self.name = name
-        self.node_index = node_index
         self.offset_matrix = offset_matrix
 
 class Index:
@@ -58,10 +57,8 @@ class Index:
     def add(self, key, value):
         if self.map.get(key) != None:
             raise Exception("item {} already exists in index".format(key))
-        i = len(self.array)
-        self.map[key] = i
+        self.map[key] = len(self.array)
         self.array.append(value)
-        return i
 
     def get(self, key):
         return self.array[self.find(key)]
@@ -98,10 +95,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         data = MDL_Model()
 
         for obj in bpy.data.objects:
-            p_index = -1
-            if obj.parent != None:
-                p_index = data.node_index.find(obj.parent.name)
-            data.node_index.add(obj.name, MDL_Node(obj.name, p_index, obj.matrix_local.transposed()))
+            data.node_index.add(obj.name, MDL_Node(obj.name, obj.parent, obj.matrix_local.transposed()))
 
         armature = None
         num_armatures = len(bpy.data.armatures)
@@ -115,18 +109,17 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
             armature_matrix = bpy.data.objects[armature.name].matrix_world
             for bone in armature.bones:
                 matrix_local = bone.matrix_local
-                bone_parent = armature.name
+                parent = armature.name
                 if bone.parent != None:
                     # bone.matrix_local is relative to the armature - multiply by the parent bone's inverse
                     matrix_local = bone.parent.matrix_local.inverted() @ matrix_local
-                    bone_parent = bone.parent.name
-                p_index = data.node_index.find(bone_parent)
-                n_index = data.node_index.add(bone.name, MDL_Node(bone.name, p_index, matrix_local.transposed()))
+                    parent = bone.parent.name
+                data.node_index.add(bone.name, MDL_Node(bone.name, parent, matrix_local.transposed()))
 
                 offset_matrix = armature_matrix @ bone.matrix_local
                 offset_matrix.invert()
                 offset_matrix.transpose()
-                data.bone_index.add(bone.name, MDL_Bone(bone.name, n_index, offset_matrix))
+                data.bone_index.add(bone.name, MDL_Bone(bone.name, offset_matrix))
         
         for node in data.node_index.array:
             write_matrix(f, "node {}:".format(node.name), node.transform)
