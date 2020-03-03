@@ -16,6 +16,8 @@ bl_info = {
     "category": "Import-Export"
 }
 
+MDL_SIGNATURE = "MDL"
+
 class MDL_Vertex:
     def __init__(self, p, n, uv, node_index):
         self.position = tuple(p)
@@ -33,7 +35,7 @@ class MDL_Vertex:
         self.hash_value = hash((self.position, self.normal, self.uv, self.node_index, self.bone_indices, self.bone_weights, self.bone_count))
 
     def __eq__(self, other):
-        return (self.position == other.position) and (self.normal == other.normal) and (self.uv == other.uv) and (self.node_index == other.node_index) \
+        return (self.position == other.position) and (self.normal == other.normal) and (self.uv == other.uv) and (self.node_index == other.node_index) and \
             (self.bone_indices == other.bone_indices) and (self.bone_weights == other.bone_weights) and (self.bone_count == other.bone_count)
 
     def __hash__(self):
@@ -182,9 +184,8 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                         data.vertex_map[vertex] = index
                         data.vertex_set.append(vertex)
                     mesh_data.index_array.append(index)
-            
             data.mesh_array.append(mesh_data)
-            
+        
         for vertex in data.vertex_set:
             f.write("({0:.6f}, {1:.6f}, {2:.6f}), ({3:.6f}, {4:.6f}, {5:.6f}), ({6:.6f}, {7:.6f}), ({8:.6f}, {9:.6f}, {10:.6f}, {11:.6f}), ({12:.6f}, {13:.6f}, {14:.6f}, {15:.6f}), {16:.6f}\n".format(
                 vertex.position[0], vertex.position[1], vertex.position[2],
@@ -194,7 +195,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                 vertex.bone_weights[0], vertex.bone_weights[1], vertex.bone_weights[2], vertex.bone_weights[3],
                 vertex.bone_count
             ))
-        f.write("SAVED {} WRITES\n".format(len(data.index_array) - len(data.vertex_set)))
+
         f.close()
 
     def execute(self, context):
