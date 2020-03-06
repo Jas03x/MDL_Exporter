@@ -148,7 +148,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
             self.write_string(f, node.name)
             self.write_string(f, node.parent)
             self.write_matrix(f, node.transform)
-        f.write(struct.pack("H", Flag.TERMINATOR | MDL.NODE_ARRAY))
+        f.write(struct.pack("B", Flag.TERMINATOR | MDL.NODE_ARRAY))
 
         f.write(struct.pack("B", MDL.BONE_ARRAY))
         f.write(struct.pack("H", len(bone_array)))
@@ -156,7 +156,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
             f.write(struct.pack("B", MDL.BONE))
             self.write_string(f, bone.name)
             self.write_matrix(f, bone.offset_matrix)
-        f.write(struct.pack("H", Flag.TERMINATOR | MDL.BONE_ARRAY))
+        f.write(struct.pack("B", Flag.TERMINATOR | MDL.BONE_ARRAY))
 
         f.write(struct.pack("B", Flag.TERMINATOR | MDL.NODE_BLOCK))
     
