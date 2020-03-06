@@ -64,6 +64,12 @@ class MDL_Vertex:
         self.hash_value = 0
     
     def finalize(self):
+        # make sure the weights sum to 1.0
+        weight_sum = sum(self.bone_weights)
+        if weight_sum < 1.0:
+            biggest_weight = max(self.bone_weights)
+            self.bone_weights[self.bone_weights.index(biggest_weight)] += 1.0 - weight_sum
+
         self.bone_indices = tuple(self.bone_indices)
         self.bone_weights = tuple(self.bone_weights)
         self.hash_value = hash((self.position, self.normal, self.uv, self.node_index, self.bone_indices, self.bone_weights, self.bone_count))
@@ -263,8 +269,8 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                     raise Exception("mesh has non-triangular polygons")
                 for i in range(face.loop_start, face.loop_start + face.loop_total):
                     v = mesh.vertices[mesh.loops[i].vertex_index]
-                    if len(v.groups) > 4:
-                        raise Exception("a vertex has more than 4 bones")
+                    if (len(v.groups) == 0) or (len(v.groups) > 4):
+                        raise Exception("a vertex has invalid bones")
                     vertex = MDL_Vertex(bind_shape_matrix @ v.co, v.normal, uv_layer[i].uv, node_index)
                     for g in v.groups:
                         vertex.bone_indices[vertex.bone_count] = vertex_group_map[g.group]
