@@ -169,13 +169,15 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         f.write(struct.pack("B", MDL.MESH_BLOCK))
         
         f.write(struct.pack("B", MDL.VERTEX_ARRAY))
+        f.write(struct.pack("H", len(vertex_array)))
         for vertex in vertex_array:
-            f.write(struct.pack("B", MDL.VERTEX_ARRAY))
+            f.write(struct.pack("B", MDL.VERTEX))
             f.write(struct.pack("3f3f2f", *vertex.position, *vertex.normal, *vertex.uv))
-            f.write(struct.pack("B4B4fB", vertex.node_index, *vertex.bone_indices, *vertex.bone_weights, vertex.bone_count))
+            f.write(struct.pack("I4B4fI", vertex.node_index, *vertex.bone_indices, *vertex.bone_weights, vertex.bone_count))
         f.write(struct.pack("B", Flag.TERMINATOR | MDL.VERTEX_ARRAY))
 
         f.write(struct.pack("B", MDL.MESH_ARRAY))
+        f.write(struct.pack("H", len(mesh_array)))
         for mesh in mesh_array:
             f.write(struct.pack("B", MDL.MESH))
             self.write_string(f, mesh.name)
