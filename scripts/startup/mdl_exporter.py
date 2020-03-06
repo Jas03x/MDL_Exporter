@@ -3,6 +3,7 @@ import bpy
 from bpy.props import (BoolProperty, FloatProperty, StringProperty, EnumProperty)
 from bpy_extras.io_utils import (ImportHelper, ExportHelper, orientation_helper, path_reference_mode, axis_conversion)
 from mathutils import Matrix
+import struct
 
 bl_info = {
     "name": "MDL format",
@@ -16,7 +17,40 @@ bl_info = {
     "category": "Import-Export"
 }
 
-MDL_SIGNATURE = "MDL"
+MDL_SIGNATURE   = 0x004C444D # 'MDL'
+MDL_END_OF_FILE = 0x00464F45 # 'EOF'
+
+class Flag:
+    CLASS = 0x20
+    ARRAY = 0x40
+    BLOCK = 0x60
+    TERMINATOR = 0x80
+
+class ID:
+    STRING   = 0x1
+    NODE     = 0x2
+    BONE     = 0x3
+    VERTEX   = 0x4
+    MATERIAL = 0x5
+    MESH     = 0x6
+    INDEX    = 0x7
+    MATRIX   = 0x8
+
+class MDL:
+    NODE_BLOCK     = Flag.BLOCK | ID.NODE
+    MATERIAL_BLOCK = Flag.BLOCK | ID.MATERIAL
+    MESH_BLOCK     = Flag.BLOCK | ID.MESH
+    NODE_ARRAY     = Flag.ARRAY | ID.NODE
+    BONE_ARRAY     = Flag.ARRAY | ID.BONE
+    VERTEX_ARRAY   = Flag.ARRAY | ID.VERTEX
+    INDEX_ARRAY    = Flag.ARRAY | ID.INDEX
+    MESH_ARRAY     = Flag.ARRAY | ID.MESH
+    STRING         = Flag.CLASS | ID.STRING
+    NODE           = Flag.CLASS | ID.NODE
+    BONE           = Flag.CLASS | ID.BONE
+    VERTEX         = Flag.CLASS | ID.VERTEX
+    MESH           = Flag.CLASS | ID.MESH
+    MATRIX         = Flag.CLASS | ID.MATRIX
 
 class MDL_Vertex:
     def __init__(self, p, n, uv, node_index):
@@ -79,17 +113,12 @@ class MDL_Mesh:
 
 class MDL_Model:
     def __init__(self):
+        self.texture = None
         self.vertex_set = []
         self.vertex_map = {}
         self.mesh_array = []
         self.bone_index = Index()
         self.node_index = Index()
-
-def write_matrix(f, text, matrix):
-    f.write("{}\n".format(text))
-    for i in range(4):
-        f.write("[{0:.6f}, {1:.6f}, {2:.6f}, {3:.6f}]\n".format(matrix[i][0], matrix[i][1], matrix[i][2], matrix[i][3]))
-    f.write("\n")
 
 class MDL_Exporter(bpy.types.Operator, ExportHelper):
     bl_idname = "export_scene.mdl"
@@ -97,13 +126,82 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
 
     filename_ext = ".mdl"
 
-    def process(self):
-        f = open(self.filepath, "w")
+    def write_string(self, f, str):
+        f.write(struct.pack("B", MDL.STRING))
+        if str == None:
+            f.write(struct.pack("BB", 0, 0))
+        else:
+            f.write(struct.pack("B", len(str) + 1))
+            f.write(struct.pack("{}s".format(len(str) + 1), str.encode("utf-8")))
+    
+    def write_matrix(self, f, matrix):
+        f.write(struct.pack("B", MDL.MATRIX))
+        f.write(struct.pack("4f4f4f4f", *matrix[0], *matrix[1], *matrix[2], *matrix[3]))
 
-        data = MDL_Model()
+    def write_node_block(self, f, node_array, bone_array):
+        f.write(struct.pack("B", MDL.NODE_BLOCK))
+        
+        f.write(struct.pack("B", MDL.NODE_ARRAY))
+        f.write(struct.pack("H", len(node_array)))
+        for node in node_array:
+            f.write(struct.pack("B", MDL.NODE))
+            self.write_string(f, node.name)
+            self.write_string(f, node.parent)
+            self.write_matrix(f, node.transform)
+        f.write(struct.pack("H", Flag.TERMINATOR | MDL.NODE_ARRAY))
+
+        f.write(struct.pack("B", MDL.BONE_ARRAY))
+        f.write(struct.pack("H", len(bone_array)))
+        for bone in bone_array:
+            f.write(struct.pack("B", MDL.BONE))
+            self.write_string(f, bone.name)
+            self.write_matrix(f, bone.offset_matrix)
+        f.write(struct.pack("H", Flag.TERMINATOR | MDL.BONE_ARRAY))
+
+        f.write(struct.pack("B", Flag.TERMINATOR | MDL.NODE_BLOCK))
+    
+    def write_material_block(self, f, texture):
+        f.write(struct.pack("B", MDL.MATERIAL_BLOCK))
+        self.write_string(f, texture)
+        f.write(struct.pack("B", Flag.TERMINATOR | MDL.MATERIAL_BLOCK))
+    
+    def write_mesh_block(self, f, vertex_array, mesh_array):
+        f.write(struct.pack("B", MDL.MESH_BLOCK))
+        
+        f.write(struct.pack("B", MDL.VERTEX_ARRAY))
+        for vertex in vertex_array:
+            f.write(struct.pack("B", MDL.VERTEX_ARRAY))
+            f.write(struct.pack("3f3f2f", *vertex.position, *vertex.normal, *vertex.uv))
+            f.write(struct.pack("B4B4fB", vertex.node_index, *vertex.bone_indices, *vertex.bone_weights, vertex.bone_count))
+        f.write(struct.pack("B", Flag.TERMINATOR | MDL.VERTEX_ARRAY))
+
+        f.write(struct.pack("B", MDL.MESH_ARRAY))
+        for mesh in mesh_array:
+            f.write(struct.pack("B", MDL.MESH))
+            self.write_string(f, mesh.name)
+            f.write(struct.pack("B", MDL.INDEX_ARRAY))
+            f.write(struct.pack("H", len(mesh.index_array)))
+            f.write(struct.pack("{}H".format(len(mesh.index_array)), *mesh.index_array))
+            f.write(struct.pack("B", Flag.TERMINATOR | MDL.INDEX_ARRAY))
+        f.write(struct.pack("B", Flag.TERMINATOR | MDL.MESH_ARRAY))
+
+        f.write(struct.pack("B", Flag.TERMINATOR | MDL.MESH_BLOCK))
+
+    def write_file(self, data):
+        f = open(self.filepath, "wb")
+        f.write(struct.pack("I", MDL_SIGNATURE))
+        self.write_node_block(f, data.node_index.array, data.bone_index.array)
+        self.write_material_block(f, data.texture)
+        self.write_mesh_block(f, data.vertex_set, data.mesh_array)
+        f.write(struct.pack("I", MDL_END_OF_FILE))
+        f.close()
+
+    def process(self):
+        mdl_data = MDL_Model()
 
         for obj in bpy.data.objects:
-            data.node_index.add(obj.name, MDL_Node(obj.name, obj.parent, obj.matrix_local.transposed()))
+            parent = None if obj.parent is None else obj.parent.name
+            mdl_data.node_index.add(obj.name, MDL_Node(obj.name, parent, obj.matrix_local.transposed()))
 
         armature = None
         num_armatures = len(bpy.data.armatures)
@@ -122,21 +220,16 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                     # bone.matrix_local is relative to the armature - multiply by the parent bone's inverse
                     matrix_local = bone.parent.matrix_local.inverted() @ matrix_local
                     parent = bone.parent.name
-                data.node_index.add(bone.name, MDL_Node(bone.name, parent, matrix_local.transposed()))
+                mdl_data.node_index.add(bone.name, MDL_Node(bone.name, parent, matrix_local.transposed()))
 
                 offset_matrix = armature_matrix @ bone.matrix_local
                 offset_matrix.invert()
                 offset_matrix.transpose()
-                data.bone_index.add(bone.name, MDL_Bone(bone.name, offset_matrix))
-        
-        for node in data.node_index.array:
-            write_matrix(f, "node {}:".format(node.name), node.transform)
-        for bone in data.bone_index.array:
-            write_matrix(f, "bone {}:".format(bone.name), bone.offset_matrix)
+                mdl_data.bone_index.add(bone.name, MDL_Bone(bone.name, offset_matrix))
         
         texture = bpy.data.images.get("Texture")
         if texture != None:
-            f.write("texture path: {}\n".format(texture.filepath))
+            mdl_data.texture = texture.filepath
         else:
             raise Exception("texture not found")
 
@@ -154,16 +247,15 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                 bind_shape_matrix[1] = [0, 0, 1, 0]
                 bind_shape_matrix[2] = [0, -1, 0, 0]
                 bind_shape_matrix[3] = [offset[0], offset[1], offset[2], 1]
-            write_matrix(f, "bind shape matrix:", bind_shape_matrix)
 
             uv_layer = mesh.uv_layers.active.data
 
             vertex_group_map = [] # maps the group index to the bone index
             for group in bpy.data.objects[mesh.name].vertex_groups:
-                vertex_group_map.append(data.bone_index.find(group.name))
+                vertex_group_map.append(mdl_data.bone_index.find(group.name))
 
-            mesh_data = MDL_Mesh(mesh.name)
-            node_index = data.node_index.find(mesh.name)
+            mdl_mesh = MDL_Mesh(mesh.name)
+            node_index = mdl_data.node_index.find(mesh.name)
             for face in mesh.polygons:
                 if face.loop_total != 3:
                     raise Exception("mesh has non-triangular polygons")
@@ -178,29 +270,20 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                         vertex.bone_count += 1
                     vertex.finalize()
 
-                    index = data.vertex_map.get(vertex, -1)
+                    index = mdl_data.vertex_map.get(vertex, -1)
                     if index == -1:
-                        index = len(data.vertex_set)
-                        data.vertex_map[vertex] = index
-                        data.vertex_set.append(vertex)
-                    mesh_data.index_array.append(index)
-            data.mesh_array.append(mesh_data)
-        
-        for vertex in data.vertex_set:
-            f.write("({0:.6f}, {1:.6f}, {2:.6f}), ({3:.6f}, {4:.6f}, {5:.6f}), ({6:.6f}, {7:.6f}), ({8:.6f}, {9:.6f}, {10:.6f}, {11:.6f}), ({12:.6f}, {13:.6f}, {14:.6f}, {15:.6f}), {16:.6f}\n".format(
-                vertex.position[0], vertex.position[1], vertex.position[2],
-                vertex.normal[0], vertex.normal[1], vertex.normal[2],
-                vertex.uv[0], vertex.uv[1],
-                vertex.bone_indices[0], vertex.bone_indices[1], vertex.bone_indices[2], vertex.bone_indices[3],
-                vertex.bone_weights[0], vertex.bone_weights[1], vertex.bone_weights[2], vertex.bone_weights[3],
-                vertex.bone_count
-            ))
+                        index = len(mdl_data.vertex_set)
+                        mdl_data.vertex_map[vertex] = index
+                        mdl_data.vertex_set.append(vertex)
+                    mdl_mesh.index_array.append(index)
+            mdl_data.mesh_array.append(mdl_mesh)
 
-        f.close()
+        return mdl_data
 
     def execute(self, context):
         try:
-            self.process()
+            mdl = self.process()
+            self.write_file(mdl)
         except Exception as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
