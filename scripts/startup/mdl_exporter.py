@@ -65,10 +65,11 @@ class MDL_Vertex:
     
     def finalize(self):
         # make sure the weights sum to 1.0
-        weight_sum = sum(self.bone_weights)
-        if weight_sum < 1.0:
-            biggest_weight = max(self.bone_weights)
-            self.bone_weights[self.bone_weights.index(biggest_weight)] += 1.0 - weight_sum
+        if self.bone_count > 0:
+            weight_sum = sum(self.bone_weights)
+            if weight_sum < 1.0:
+                biggest_weight = max(self.bone_weights)
+                self.bone_weights[self.bone_weights.index(biggest_weight)] += 1.0 - weight_sum
 
         self.bone_indices = tuple(self.bone_indices)
         self.bone_weights = tuple(self.bone_weights)
@@ -119,7 +120,7 @@ class MDL_Mesh:
 
 class MDL_Model:
     def __init__(self):
-        self.texture = None
+        self.diffuse_texture = None
         self.vertex_set = []
         self.vertex_map = {}
         self.mesh_array = []
@@ -199,7 +200,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         f = open(self.filepath, "wb")
         f.write(struct.pack("I", MDL_SIGNATURE))
         self.write_node_block(f, data.node_index.array, data.bone_index.array)
-        self.write_material_block(f, data.texture)
+        self.write_material_block(f, data.diffuse_texture)
         self.write_mesh_block(f, data.vertex_set, data.mesh_array)
         f.write(struct.pack("I", MDL_END_OF_FILE))
         f.close()
@@ -235,11 +236,9 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                 offset_matrix.transpose()
                 mdl_data.bone_index.add(bone.name, MDL_Bone(bone.name, offset_matrix))
         
-        texture = bpy.data.images.get("Texture")
+        texture = bpy.data.images.get("Diffuse")
         if texture != None:
-            mdl_data.texture = texture.filepath
-        else:
-            raise Exception("texture not found")
+            mdl_data.diffuse_texture = texture.filepath
 
         for mesh in bpy.data.meshes:
             mesh_object = bpy.data.objects[mesh.name]
@@ -269,13 +268,20 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                     raise Exception("mesh has non-triangular polygons")
                 for i in range(face.loop_start, face.loop_start + face.loop_total):
                     v = mesh.vertices[mesh.loops[i].vertex_index]
-                    if (len(v.groups) == 0) or (len(v.groups) > 4):
+                    num_groups = len(v.groups)
+                    vertex = None
+
+                    if num_groups > 4:
                         raise Exception("a vertex has invalid bones")
-                    vertex = MDL_Vertex(bind_shape_matrix @ v.co, v.normal, uv_layer[i].uv, node_index)
-                    for g in v.groups:
-                        vertex.bone_indices[vertex.bone_count] = vertex_group_map[g.group]
-                        vertex.bone_weights[vertex.bone_count] = g.weight
-                        vertex.bone_count += 1
+                    elif num_groups == 0:
+                        vertex = MDL_Vertex(bind_shape_matrix @ v.co, v.normal, uv_layer[i].uv, node_index)
+                        vertex.bone_count = 0
+                    else:
+                        vertex = MDL_Vertex(bind_shape_matrix @ v.co, v.normal, uv_layer[i].uv, node_index)
+                        for g in v.groups:
+                            vertex.bone_indices[vertex.bone_count] = vertex_group_map[g.group]
+                            vertex.bone_weights[vertex.bone_count] = g.weight
+                            vertex.bone_count += 1
                     vertex.finalize()
 
                     index = mdl_data.vertex_map.get(vertex, -1)
