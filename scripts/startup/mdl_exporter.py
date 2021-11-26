@@ -239,6 +239,8 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         texture = bpy.data.images.get("Diffuse")
         if texture != None:
             mdl_data.diffuse_texture = texture.filepath
+        else:
+            raise Exception("could not find the diffuse texture")
 
         for mesh in bpy.data.meshes:
             mesh_object = bpy.data.objects[mesh.name]
