@@ -304,7 +304,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         return {"FINISHED"}
 
 def menu_func_export(self, context):
-    self.layout.operator(MDL_Exporter.bl_idname, text="MDL Exporter (.mdl)")    
+    self.layout.operator(MDL_Exporter.bl_idname, text="MDL (.mdl)")    
 
 def register():
     bpy.utils.register_class(MDL_Exporter)
