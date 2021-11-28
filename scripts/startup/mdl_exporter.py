@@ -120,7 +120,9 @@ class MDL_Mesh:
 
 class MDL_Model:
     def __init__(self):
+        self.ambient_texture = None
         self.diffuse_texture = None
+        self.specular_texture = None
         self.vertex_set = []
         self.vertex_map = {}
         self.mesh_array = []
@@ -167,9 +169,11 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
 
         f.write(struct.pack("B", Flag.TERMINATOR | MDL.NODE_BLOCK))
     
-    def write_material_block(self, f, texture):
+    def write_material_block(self, f, ambient_texture, diffuse_texture, specular_texture):
         f.write(struct.pack("B", MDL.MATERIAL_BLOCK))
-        self.write_string(f, texture)
+        self.write_string(f, ambient_texture)
+        self.write_string(f, diffuse_texture)
+        self.write_string(f, specular_texture)
         f.write(struct.pack("B", Flag.TERMINATOR | MDL.MATERIAL_BLOCK))
     
     def write_mesh_block(self, f, vertex_array, mesh_array):
@@ -200,7 +204,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         f = open(self.filepath, "wb")
         f.write(struct.pack("I", MDL_SIGNATURE))
         self.write_node_block(f, data.node_index.array, data.bone_index.array)
-        self.write_material_block(f, data.diffuse_texture)
+        self.write_material_block(f, data.ambient_texture, data.diffuse_texture, data.specular_texture)
         self.write_mesh_block(f, data.vertex_set, data.mesh_array)
         f.write(struct.pack("I", MDL_END_OF_FILE))
         f.close()
@@ -236,11 +240,23 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                 offset_matrix.transpose()
                 mdl_data.bone_index.add(bone.name, MDL_Bone(bone.name, offset_matrix))
         
-        texture = bpy.data.images.get("Diffuse")
-        if texture != None:
-            mdl_data.diffuse_texture = texture.filepath
+        ambient_texture = bpy.data.images.get("Ambient")
+        if ambient_texture != None:
+            mdl_data.ambient_texture = ambient_texture.filepath
+        else:
+            raise Exception("could not find the ambient texture")
+
+        diffuse_texture = bpy.data.images.get("Diffuse")
+        if diffuse_texture != None:
+            mdl_data.diffuse_texture = diffuse_texture.filepath
         else:
             raise Exception("could not find the diffuse texture")
+
+        specular_texture = bpy.data.images.get("Specular")
+        if specular_texture != None:
+            mdl_data.specular_texture = specular_texture.filepath
+        else:
+            raise Exception("could not find the specular texture")
 
         for mesh in bpy.data.meshes:
             mesh_object = bpy.data.objects[mesh.name]
