@@ -3,6 +3,8 @@ import bpy
 from bpy.props import (BoolProperty, FloatProperty, StringProperty, EnumProperty)
 from bpy_extras.io_utils import (ImportHelper, ExportHelper, orientation_helper, path_reference_mode, axis_conversion)
 from mathutils import Matrix
+
+import os
 import struct
 
 bl_info = {
@@ -242,19 +244,19 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         
         ambient_texture = bpy.data.images.get("Ambient")
         if ambient_texture != None:
-            mdl_data.ambient_texture = ambient_texture.filepath
+            mdl_data.ambient_texture = os.path.basename(ambient_texture.filepath)
         else:
             raise Exception("could not find the ambient texture")
 
         diffuse_texture = bpy.data.images.get("Diffuse")
         if diffuse_texture != None:
-            mdl_data.diffuse_texture = diffuse_texture.filepath
+            mdl_data.diffuse_texture = os.path.basename(diffuse_texture.filepath)
         else:
             raise Exception("could not find the diffuse texture")
 
         specular_texture = bpy.data.images.get("Specular")
         if specular_texture != None:
-            mdl_data.specular_texture = specular_texture.filepath
+            mdl_data.specular_texture = os.path.basename(specular_texture.filepath)
         else:
             raise Exception("could not find the specular texture")
 
