@@ -261,6 +261,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
             raise Exception("could not find the specular texture")
 
         for mesh in bpy.data.meshes:
+            mesh.calc_normals_split()
             mesh_object = bpy.data.objects[mesh.name]
             mesh_armature = mesh_object.find_armature()
             
@@ -287,6 +288,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                 if face.loop_total != 3:
                     raise Exception("mesh has non-triangular polygons")
                 for i in range(face.loop_start, face.loop_start + face.loop_total):
+                    n = mesh.loops[i].normal
                     v = mesh.vertices[mesh.loops[i].vertex_index]
                     num_groups = len(v.groups)
                     vertex = None
@@ -294,10 +296,10 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                     if num_groups > 4:
                         raise Exception("a vertex has invalid bones")
                     elif num_groups == 0:
-                        vertex = MDL_Vertex(bind_shape_matrix @ v.co, v.normal, uv_layer[i].uv, node_index)
+                        vertex = MDL_Vertex(bind_shape_matrix @ v.co, n, uv_layer[i].uv, node_index)
                         vertex.bone_count = 0
                     else:
-                        vertex = MDL_Vertex(bind_shape_matrix @ v.co, v.normal, uv_layer[i].uv, node_index)
+                        vertex = MDL_Vertex(bind_shape_matrix @ v.co, n, uv_layer[i].uv, node_index)
                         for g in v.groups:
                             vertex.bone_indices[vertex.bone_count] = vertex_group_map[g.group]
                             vertex.bone_weights[vertex.bone_count] = g.weight
@@ -310,7 +312,9 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                         mdl_data.vertex_map[vertex] = index
                         mdl_data.vertex_set.append(vertex)
                     mdl_mesh.index_array.append(index)
+            
             mdl_data.mesh_array.append(mdl_mesh)
+            mesh.free_normals_split();
 
         return mdl_data
 
