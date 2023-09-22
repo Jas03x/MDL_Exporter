@@ -11,7 +11,7 @@ bl_info = {
     "name": "MDL format",
     "author": "Jas",
     "version": (0, 0, 1),
-    "blender": (2, 81, 6),
+    "blender": (3, 6, 2),
     "location": "File > Import-Export",
     "description": "MDL scene exporter",
     "warning": "",
