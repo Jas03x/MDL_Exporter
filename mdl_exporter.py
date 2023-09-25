@@ -166,36 +166,32 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         f.write(struct.pack("B", Flag.TERMINATOR | MDL.MATERIAL_BLOCK))
     
     def write_mesh_block(self, f, vertex_array, mesh_array):
-        f.write(struct.pack("I", MDL_MESH))
+        f.write(struct.pack("IIII", MDL_BLOCK, MDL_MESH, 0, 0))
         
-        f.write(struct.pack("B", MDL.VERTEX_ARRAY))
-        f.write(struct.pack("H", len(vertex_array)))
+        f.write(struct.pack("IIII", MDL_LIST, MDL_VERTEX, len(vertex_array), 0))
         for vertex in vertex_array:
-            f.write(struct.pack("B", MDL.VERTEX))
-            f.write(struct.pack("3f3f2f", *vertex.position, *vertex.normal, *vertex.uv))
-            f.write(struct.pack("I4B4fI", vertex.node_index, *vertex.bone_indices, *vertex.bone_weights, vertex.bone_count))
-        f.write(struct.pack("B", Flag.TERMINATOR | MDL.VERTEX_ARRAY))
+            f.write(struct.pack("H", MDL_VERTEX))
+            f.write(struct.pack("3f3f2fBB4B4f", *vertex.position, *vertex.normal, *vertex.uv, vertex.node_index, vertex.bone_count, *vertex.bone_indices, *vertex.bone_weights))
+        f.write(struct.pack("I", MDL_END))
 
-        f.write(struct.pack("B", MDL.MESH_ARRAY))
-        f.write(struct.pack("H", len(mesh_array)))
+        f.write(struct.pack("IIII", MDL_LIST, MDL_MESH, len(mesh_array), 0))
         for mesh in mesh_array:
-            f.write(struct.pack("B", MDL.MESH))
+            f.write(struct.pack("I", MDL_MESH))
             self.write_string(f, mesh.name)
-            f.write(struct.pack("B", MDL.INDEX_ARRAY))
-            f.write(struct.pack("H", len(mesh.index_array)))
+            f.write(struct.pack("IIII", MDL_LIST, MDL_INDEX, len(mesh.index_array), 0))
             f.write(struct.pack("{}H".format(len(mesh.index_array)), *mesh.index_array))
-            f.write(struct.pack("B", Flag.TERMINATOR | MDL.INDEX_ARRAY))
-        f.write(struct.pack("B", Flag.TERMINATOR | MDL.MESH_ARRAY))
+            f.write(struct.pack("I", MDL_END))
+        f.write(struct.pack("I", MDL_END))
 
         f.write(struct.pack("I", MDL_END))
 
     def write_file(self, data):
         f = open(self.filepath, "wb")
-        f.write(struct.pack("I", MDL_SIGNATURE))
+        f.write(struct.pack("I", MDL_SIG))
         self.write_node_block(f, data.node_index.array, data.bone_index.array)
         self.write_material_block(f, data.ambient_texture, data.diffuse_texture, data.specular_texture)
         self.write_mesh_block(f, data.vertex_set, data.mesh_array)
-        f.write(struct.pack("I", MDL_END_OF_FILE))
+        f.write(struct.pack("I", MDL_EOF))
         f.close()
 
     def process(self):
@@ -315,7 +311,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         return {"FINISHED"}
 
 def menu_func_export(self, context):
-    self.layout.operator(MDL_Exporter.bl_idname, text="MDL (.mdl)")    
+    self.layout.operator(MDL_Exporter.bl_idname, text="MDL (.mdl)")
 
 def register():
     bpy.utils.register_class(MDL_Exporter)
