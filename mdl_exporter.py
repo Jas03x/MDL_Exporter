@@ -19,40 +19,20 @@ bl_info = {
     "category": "Import-Export"
 }
 
-MDL_SIGNATURE   = 0x004C444D # 'MDL'
-MDL_END_OF_FILE = 0x00464F45 # 'EOF'
-
-class Flag:
-    CLASS = 0x20
-    ARRAY = 0x40
-    BLOCK = 0x60
-    TERMINATOR = 0x80
-
-class ID:
-    STRING   = 0x1
-    NODE     = 0x2
-    BONE     = 0x3
-    VERTEX   = 0x4
-    MATERIAL = 0x5
-    MESH     = 0x6
-    INDEX    = 0x7
-    MATRIX   = 0x8
-
-class MDL:
-    NODE_BLOCK     = Flag.BLOCK | ID.NODE
-    MATERIAL_BLOCK = Flag.BLOCK | ID.MATERIAL
-    MESH_BLOCK     = Flag.BLOCK | ID.MESH
-    NODE_ARRAY     = Flag.ARRAY | ID.NODE
-    BONE_ARRAY     = Flag.ARRAY | ID.BONE
-    VERTEX_ARRAY   = Flag.ARRAY | ID.VERTEX
-    INDEX_ARRAY    = Flag.ARRAY | ID.INDEX
-    MESH_ARRAY     = Flag.ARRAY | ID.MESH
-    STRING         = Flag.CLASS | ID.STRING
-    NODE           = Flag.CLASS | ID.NODE
-    BONE           = Flag.CLASS | ID.BONE
-    VERTEX         = Flag.CLASS | ID.VERTEX
-    MESH           = Flag.CLASS | ID.MESH
-    MATRIX         = Flag.CLASS | ID.MATRIX
+MDL_SIG     = 0x004C444D # 'MDL'
+MDL_EOF     = 0x00464F45 # 'EOF'
+MDL_LIST    = 0x5354494C # 'LIST'
+MDL_BLOCK   = 0x004B4C42 # 'BLK'
+MDL_VERTEX  = 0x00005856 # 'VX'
+MDL_STRING  = 0x00525453 # 'STR'
+MDL_MATRIX4 = 0x0034584D # 'MX4'
+MDL_BONE    = 0x454E4F42 # 'BONE'
+MDL_NODE    = 0x45444F4E # 'NODE'
+MDL_MTL     = 0x004C544D # 'MTL'
+MDL_MESH    = 0x4853454D # 'MESH'
+MDL_INDEX   = 0x58444E49 # 'INDX'
+MDL_TEXTURE = 0x54584554 # 'TEXT'
+MDL_END     = 0x00444E45 # 'END'
 
 class MDL_Vertex:
     def __init__(self, p, n, uv, node_index):
@@ -138,7 +118,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
     filename_ext = ".mdl"
 
     def write_string(self, f, str):
-        f.write(struct.pack("B", MDL.STRING))
+        f.write(struct.pack("I", MDL_STRING))
         if str == None:
             f.write(struct.pack("BB", 0, 0))
         else:
@@ -146,31 +126,38 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
             f.write(struct.pack("{}s".format(len(str) + 1), str.encode("utf-8")))
     
     def write_matrix(self, f, matrix):
-        f.write(struct.pack("B", MDL.MATRIX))
+        f.write(struct.pack("I", MDL_MATRIX4))
         f.write(struct.pack("4f4f4f4f", *matrix[0], *matrix[1], *matrix[2], *matrix[3]))
+        f.write(MDL_END)
 
-    def write_node_block(self, f, node_array, bone_array):
-        f.write(struct.pack("B", MDL.NODE_BLOCK))
-        
-        f.write(struct.pack("B", MDL.NODE_ARRAY))
-        f.write(struct.pack("H", len(node_array)))
+    def write_node_block(self, f, node_array):
+        f.write(struct.pack("IIII", MDL_BLOCK, MDL_NODE, 0, 0))
+
+        f.write(struct.pack("IIII", MDL_LIST, MDL_NODE, len(node_array), 0))
         for node in node_array:
-            f.write(struct.pack("B", MDL.NODE))
+            f.write(struct.pack("I", MDL_NODE))
             self.write_string(f, node.name)
             self.write_string(f, node.parent)
             self.write_matrix(f, node.transform)
-        f.write(struct.pack("B", Flag.TERMINATOR | MDL.NODE_ARRAY))
+            f.write(struct.pack("I", MDL_END))
+        f.write(struct.pack("I", MDL_END))
 
-        f.write(struct.pack("B", MDL.BONE_ARRAY))
-        f.write(struct.pack("H", len(bone_array)))
+        f.write(struct.pack("I", MDL_END))
+
+    def write_bone_block(self, f, bone_array):
+        f.write(struct.pack("IIII", MDL_BLOCK, MDL_BONE, 0, 0))
+
+        f.write(struct.pack("IIII", MDL_LIST, MDL_BONE, len(bone_array), 0))
         for bone in bone_array:
-            f.write(struct.pack("B", MDL.BONE))
+            f.write(struct.pack("I", MDL_BONE))
             self.write_string(f, bone.name)
             self.write_matrix(f, bone.offset_matrix)
-        f.write(struct.pack("B", Flag.TERMINATOR | MDL.BONE_ARRAY))
+            f.write(struct.pack("I", MDL_END))
+        f.write(struct.pack("I", MDL_END))
 
-        f.write(struct.pack("B", Flag.TERMINATOR | MDL.NODE_BLOCK))
+        f.write(struct.pack("I", MDL_END))
     
+    # TODO
     def write_material_block(self, f, ambient_texture, diffuse_texture, specular_texture):
         f.write(struct.pack("B", MDL.MATERIAL_BLOCK))
         self.write_string(f, ambient_texture)
@@ -179,7 +166,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         f.write(struct.pack("B", Flag.TERMINATOR | MDL.MATERIAL_BLOCK))
     
     def write_mesh_block(self, f, vertex_array, mesh_array):
-        f.write(struct.pack("B", MDL.MESH_BLOCK))
+        f.write(struct.pack("I", MDL_MESH))
         
         f.write(struct.pack("B", MDL.VERTEX_ARRAY))
         f.write(struct.pack("H", len(vertex_array)))
@@ -200,7 +187,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
             f.write(struct.pack("B", Flag.TERMINATOR | MDL.INDEX_ARRAY))
         f.write(struct.pack("B", Flag.TERMINATOR | MDL.MESH_ARRAY))
 
-        f.write(struct.pack("B", Flag.TERMINATOR | MDL.MESH_BLOCK))
+        f.write(struct.pack("I", MDL_END))
 
     def write_file(self, data):
         f = open(self.filepath, "wb")
