@@ -128,7 +128,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
     def write_matrix(self, f, matrix):
         f.write(struct.pack("I", MDL_MATRIX4))
         f.write(struct.pack("4f4f4f4f", *matrix[0], *matrix[1], *matrix[2], *matrix[3]))
-        f.write(MDL_END)
+        f.write(struct.pack("I", MDL_END))
 
     def write_node_block(self, f, node_array):
         f.write(struct.pack("IIII", MDL_BLOCK, MDL_NODE, 0, 0))
@@ -185,7 +185,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         f.write(struct.pack("IIII", MDL_LIST, MDL_VERTEX, len(vertex_array), 0))
         for vertex in vertex_array:
             f.write(struct.pack("H", MDL_VERTEX))
-            f.write(struct.pack("3f3f2fBBB4B4f", *vertex.position, *vertex.normal, *vertex.uv, vertex.material_index, vertex.node_index, vertex.bone_count, *vertex.bone_indices, *vertex.bone_weights))
+            f.write(struct.pack("3f3f2fBB4B4f", *vertex.position, *vertex.normal, *vertex.uv, vertex.node_index, vertex.bone_count, *vertex.bone_indices, *vertex.bone_weights))
         f.write(struct.pack("I", MDL_END))
 
         f.write(struct.pack("IIII", MDL_LIST, MDL_MESH, len(mesh_array), 0))
@@ -202,7 +202,8 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
     def write_file(self, data):
         f = open(self.filepath, "wb")
         f.write(struct.pack("I", MDL_SIG))
-        self.write_node_block(f, data.node_index.array, data.bone_index.array)
+        self.write_node_block(f, data.node_index.array)
+        self.write_bone_block(f, data.bone_index.array)
         self.write_material_block(f, data.ambient_texture, data.diffuse_texture, data.specular_texture)
         self.write_mesh_block(f, data.vertex_set, data.mesh_array)
         f.write(struct.pack("I", MDL_EOF))
