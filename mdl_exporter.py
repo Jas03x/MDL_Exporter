@@ -35,11 +35,10 @@ MDL_TEXTURE = 0x54584554 # 'TEXT'
 MDL_END     = 0x00444E45 # 'END'
 
 class MDL_Vertex:
-    def __init__(self, p, n, m, uv, node_index):
+    def __init__(self, p, n, uv, node_index):
         self.position = tuple(p)
         self.normal = tuple(n)
         self.uv = tuple(uv)
-        self.material_index = m
         self.node_index = node_index
         self.bone_indices = [0, 0, 0, 0]
         self.bone_weights = [0, 0, 0, 0]
@@ -59,8 +58,8 @@ class MDL_Vertex:
         self.hash_value = hash((self.position, self.normal, self.uv, self.node_index, self.bone_indices, self.bone_weights, self.bone_count))
 
     def __eq__(self, other):
-        return (self.position == other.position) and (self.normal == other.normal) and (self.uv == other.uv) and (self.material_index == other.material_index) \
-            and (self.node_index == other.node_index) and (self.bone_indices == other.bone_indices) and (self.bone_weights == other.bone_weights) and (self.bone_count == other.bone_count)
+        return (self.position == other.position) and (self.normal == other.normal) and (self.uv == other.uv) and (self.node_index == other.node_index) \
+            and (self.bone_indices == other.bone_indices) and (self.bone_weights == other.bone_weights) and (self.bone_count == other.bone_count)
 
     def __hash__(self):
         return self.hash_value
@@ -159,11 +158,26 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         f.write(struct.pack("I", MDL_END))
     
     def write_material_block(self, f, ambient_texture, diffuse_texture, specular_texture):
-        f.write(struct.pack("B", MDL.MATERIAL_BLOCK))
-        self.write_string(f, ambient_texture)
+        f.write(struct.pack("IIII", MDL_BLOCK, MDL_MTL, 0, 0))
+
+        f.write(struct.pack("I", MDL_MTL))
+        self.write_string(f, "Diffuse")
         self.write_string(f, diffuse_texture)
-        self.write_string(f, specular_texture)
-        f.write(struct.pack("B", Flag.TERMINATOR | MDL.MATERIAL_BLOCK))
+        f.write(struct.pack("I", MDL_END))
+
+        if ambient_texture != None:
+            f.write(struct.pack("I", MDL_MTL))
+            self.write_string(f, "Ambient")
+            self.write_string(f, ambient_texture)
+            f.write(struct.pack("I", MDL_END))
+
+        if specular_texture != None:
+            f.write(struct.pack("I", MDL_MTL))
+            self.write_string(f, "Specular")
+            self.write_string(f, specular_texture)
+            f.write(struct.pack("I", MDL_END))
+
+        f.write(struct.pack("I", MDL_END))
     
     def write_mesh_block(self, f, vertex_array, mesh_array):
         f.write(struct.pack("IIII", MDL_BLOCK, MDL_MESH, 0, 0))
@@ -225,23 +239,23 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                 offset_matrix.transpose()
                 mdl_data.bone_index.add(bone.name, MDL_Bone(bone.name, offset_matrix))
         
-        ambient_texture = bpy.data.images.get("Ambient")
-        if ambient_texture != None:
-            mdl_data.ambient_texture = os.path.basename(ambient_texture.filepath)
-        else:
-            raise Exception("could not find the ambient texture")
-
         diffuse_texture = bpy.data.images.get("Diffuse")
         if diffuse_texture != None:
             mdl_data.diffuse_texture = os.path.basename(diffuse_texture.filepath)
         else:
             raise Exception("could not find the diffuse texture")
 
+        ambient_texture = bpy.data.images.get("Ambient")
+        if ambient_texture != None:
+            mdl_data.ambient_texture = os.path.basename(ambient_texture.filepath)
+        else:
+            mdl_data.ambient_texture = None
+
         specular_texture = bpy.data.images.get("Specular")
         if specular_texture != None:
             mdl_data.specular_texture = os.path.basename(specular_texture.filepath)
         else:
-            raise Exception("could not find the specular texture")
+            mdl_data.specular_texture = None
 
         for mesh in bpy.data.meshes:
             mesh.calc_normals_split()
@@ -273,17 +287,16 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                 for i in range(face.loop_start, face.loop_start + face.loop_total):
                     n = mesh.loops[i].normal
                     v = mesh.vertices[mesh.loops[i].vertex_index]
-                    m = face.material_index
                     num_groups = len(v.groups)
                     vertex = None
 
                     if num_groups > 4:
                         raise Exception("a vertex has invalid bones")
                     elif num_groups == 0:
-                        vertex = MDL_Vertex(bind_shape_matrix @ v.co, n, uv_layer[i].uv, m, node_index)
+                        vertex = MDL_Vertex(bind_shape_matrix @ v.co, n, uv_layer[i].uv, node_index)
                         vertex.bone_count = 0
                     else:
-                        vertex = MDL_Vertex(bind_shape_matrix @ v.co, n, uv_layer[i].uv, m, node_index)
+                        vertex = MDL_Vertex(bind_shape_matrix @ v.co, n, uv_layer[i].uv, node_index)
                         for g in v.groups:
                             vertex.bone_indices[vertex.bone_count] = vertex_group_map[g.group]
                             vertex.bone_weights[vertex.bone_count] = g.weight
