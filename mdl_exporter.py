@@ -201,7 +201,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
 
     def write_file(self, data):
         f = open(self.filepath, "wb")
-        f.write(struct.pack("I", MDL_SIG))
+        f.write(struct.pack("IIIIIIII", MDL_SIG, 1, 0, 0, 0, 0, 0, 0))
         self.write_node_block(f, data.node_index.array)
         self.write_bone_block(f, data.bone_index.array)
         self.write_material_block(f, data.ambient_texture, data.diffuse_texture, data.specular_texture)
