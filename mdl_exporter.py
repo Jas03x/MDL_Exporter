@@ -124,6 +124,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         else:
             f.write(struct.pack("B", len(str) + 1))
             f.write(struct.pack("{}s".format(len(str) + 1), str.encode("utf-8")))
+        f.write(struct.pack("I", MDL_END))
     
     def write_matrix(self, f, matrix):
         f.write(struct.pack("I", MDL_MATRIX4))
