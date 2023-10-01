@@ -98,6 +98,8 @@ class Index:
 class MDL_Mesh:
     def __init__(self, name):
         self.name = name
+        self.vertex_set = []
+        self.vertex_map = {}
         self.index_array = []
 
 class MDL_Model:
@@ -105,8 +107,6 @@ class MDL_Model:
         self.ambient_texture = None
         self.diffuse_texture = None
         self.specular_texture = None
-        self.vertex_set = []
-        self.vertex_map = {}
         self.mesh_array = []
         self.bone_index = Index()
         self.node_index = Index()
@@ -180,19 +180,20 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
 
         f.write(struct.pack("I", MDL_END))
     
-    def write_mesh_block(self, f, vertex_array, mesh_array):
+    def write_mesh_block(self, f, mesh_array):
         f.write(struct.pack("IIII", MDL_BLOCK, MDL_MESH, 0, 0))
-        
-        f.write(struct.pack("IIII", MDL_LIST, MDL_VERTEX, len(vertex_array), 0))
-        for vertex in vertex_array:
-            f.write(struct.pack("H", MDL_VERTEX))
-            f.write(struct.pack("3f3f2fBB4B4f", *vertex.position, *vertex.normal, *vertex.uv, vertex.node_index, vertex.bone_count, *vertex.bone_indices, *vertex.bone_weights))
-        f.write(struct.pack("I", MDL_END))
 
         f.write(struct.pack("IIII", MDL_LIST, MDL_MESH, len(mesh_array), 0))
         for mesh in mesh_array:
             f.write(struct.pack("I", MDL_MESH))
             self.write_string(f, mesh.name)
+
+            f.write(struct.pack("IIII", MDL_LIST, MDL_VERTEX, len(mesh.vertex_set), 0))
+            for vertex in mesh.vertex_set:
+                f.write(struct.pack("H", MDL_VERTEX))
+                f.write(struct.pack("3f3f2fBB4B4f", *vertex.position, *vertex.normal, *vertex.uv, vertex.node_index, vertex.bone_count, *vertex.bone_indices, *vertex.bone_weights))
+            f.write(struct.pack("I", MDL_END))
+
             f.write(struct.pack("IIII", MDL_LIST, MDL_INDEX, len(mesh.index_array), 0))
             f.write(struct.pack("{}H".format(len(mesh.index_array)), *mesh.index_array))
             f.write(struct.pack("I", MDL_END))
@@ -206,7 +207,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         self.write_node_block(f, data.node_index.array)
         self.write_bone_block(f, data.bone_index.array)
         self.write_material_block(f, data.ambient_texture, data.diffuse_texture, data.specular_texture)
-        self.write_mesh_block(f, data.vertex_set, data.mesh_array)
+        self.write_mesh_block(f, data.mesh_array)
         f.write(struct.pack("I", MDL_EOF))
         f.close()
 
@@ -305,11 +306,11 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                             vertex.bone_count += 1
                     vertex.finalize()
 
-                    index = mdl_data.vertex_map.get(vertex, -1)
+                    index = mdl_mesh.vertex_map.get(vertex, -1)
                     if index == -1:
-                        index = len(mdl_data.vertex_set)
-                        mdl_data.vertex_map[vertex] = index
-                        mdl_data.vertex_set.append(vertex)
+                        index = len(mdl_mesh.vertex_set)
+                        mdl_mesh.vertex_map[vertex] = index
+                        mdl_mesh.vertex_set.append(vertex)
                     mdl_mesh.index_array.append(index)
             
             mdl_data.mesh_array.append(mdl_mesh)
