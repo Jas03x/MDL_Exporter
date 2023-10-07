@@ -120,7 +120,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
     def write_string(self, f, str):
         f.write(struct.pack("I", MDL_STRING))
         if str == None:
-            f.write(struct.pack("BB", 0, 0))
+            f.write(struct.pack("BB", 1, 0))
         else:
             f.write(struct.pack("B", len(str) + 1))
             f.write(struct.pack("{}s".format(len(str) + 1), str.encode("utf-8")))
