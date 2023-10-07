@@ -161,22 +161,22 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
     def write_material_block(self, f, ambient_texture, diffuse_texture, specular_texture):
         f.write(struct.pack("IIII", MDL_BLOCK, MDL_MTL, 0, 0))
 
-        f.write(struct.pack("I", MDL_MTL))
-        self.write_string(f, "Diffuse")
-        self.write_string(f, diffuse_texture)
+        material_array = []
+        material_array.append(("Diffuse", diffuse_texture))
+
+        if (ambient_texture != None):
+            material_array.append(("Ambient", ambient_texture))
+
+        if (specular_texture != None):
+            material_array.append(("Specular", specular_texture))
+
+        f.write(struct.pack("IIII", MDL_LIST, MDL_MTL, len(material_array), 0))
+        for mtl in material_array:
+            f.write(struct.pack("I", MDL_MTL))
+            self.write_string(f, mtl[0])
+            self.write_string(f, mtl[1])
+            f.write(struct.pack("I", MDL_END))
         f.write(struct.pack("I", MDL_END))
-
-        if ambient_texture != None:
-            f.write(struct.pack("I", MDL_MTL))
-            self.write_string(f, "Ambient")
-            self.write_string(f, ambient_texture)
-            f.write(struct.pack("I", MDL_END))
-
-        if specular_texture != None:
-            f.write(struct.pack("I", MDL_MTL))
-            self.write_string(f, "Specular")
-            self.write_string(f, specular_texture)
-            f.write(struct.pack("I", MDL_END))
 
         f.write(struct.pack("I", MDL_END))
     
