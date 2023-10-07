@@ -118,48 +118,48 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
     filename_ext = ".mdl"
 
     def write_string(self, f, str):
-        f.write(struct.pack("I", MDL_STRING))
+        f.write(struct.pack("=I", MDL_STRING))
         if str == None:
-            f.write(struct.pack("BB", 1, 0))
+            f.write(struct.pack("=BB", 1, 0))
         else:
-            f.write(struct.pack("B", len(str) + 1))
-            f.write(struct.pack("{}s".format(len(str) + 1), str.encode("utf-8")))
-        f.write(struct.pack("I", MDL_END))
+            f.write(struct.pack("=B", len(str) + 1))
+            f.write(struct.pack("={}s".format(len(str) + 1), str.encode("utf-8")))
+        f.write(struct.pack("=I", MDL_END))
     
     def write_matrix(self, f, matrix):
-        f.write(struct.pack("I", MDL_MATRIX4))
-        f.write(struct.pack("4f4f4f4f", *matrix[0], *matrix[1], *matrix[2], *matrix[3]))
-        f.write(struct.pack("I", MDL_END))
+        f.write(struct.pack("=I", MDL_MATRIX4))
+        f.write(struct.pack("=4f4f4f4f", *matrix[0], *matrix[1], *matrix[2], *matrix[3]))
+        f.write(struct.pack("=I", MDL_END))
 
     def write_node_block(self, f, node_array):
-        f.write(struct.pack("IIII", MDL_BLOCK, MDL_NODE, 0, 0))
+        f.write(struct.pack("=IIII", MDL_BLOCK, MDL_NODE, 0, 0))
 
-        f.write(struct.pack("IIII", MDL_LIST, MDL_NODE, len(node_array), 0))
+        f.write(struct.pack("=IIII", MDL_LIST, MDL_NODE, len(node_array), 0))
         for node in node_array:
-            f.write(struct.pack("I", MDL_NODE))
+            f.write(struct.pack("=I", MDL_NODE))
             self.write_string(f, node.name)
             self.write_string(f, node.parent)
             self.write_matrix(f, node.transform)
-            f.write(struct.pack("I", MDL_END))
-        f.write(struct.pack("I", MDL_END))
+            f.write(struct.pack("=I", MDL_END))
+        f.write(struct.pack("=I", MDL_END))
 
-        f.write(struct.pack("I", MDL_END))
+        f.write(struct.pack("=I", MDL_END))
 
     def write_bone_block(self, f, bone_array):
-        f.write(struct.pack("IIII", MDL_BLOCK, MDL_BONE, 0, 0))
+        f.write(struct.pack("=IIII", MDL_BLOCK, MDL_BONE, 0, 0))
 
-        f.write(struct.pack("IIII", MDL_LIST, MDL_BONE, len(bone_array), 0))
+        f.write(struct.pack("=IIII", MDL_LIST, MDL_BONE, len(bone_array), 0))
         for bone in bone_array:
-            f.write(struct.pack("I", MDL_BONE))
+            f.write(struct.pack("=I", MDL_BONE))
             self.write_string(f, bone.name)
             self.write_matrix(f, bone.offset_matrix)
-            f.write(struct.pack("I", MDL_END))
-        f.write(struct.pack("I", MDL_END))
+            f.write(struct.pack("=I", MDL_END))
+        f.write(struct.pack("=I", MDL_END))
 
-        f.write(struct.pack("I", MDL_END))
+        f.write(struct.pack("=I", MDL_END))
     
     def write_material_block(self, f, ambient_texture, diffuse_texture, specular_texture):
-        f.write(struct.pack("IIII", MDL_BLOCK, MDL_MTL, 0, 0))
+        f.write(struct.pack("=IIII", MDL_BLOCK, MDL_MTL, 0, 0))
 
         material_array = []
         material_array.append(("Diffuse", diffuse_texture))
@@ -170,45 +170,45 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
         if (specular_texture != None):
             material_array.append(("Specular", specular_texture))
 
-        f.write(struct.pack("IIII", MDL_LIST, MDL_MTL, len(material_array), 0))
+        f.write(struct.pack("=IIII", MDL_LIST, MDL_MTL, len(material_array), 0))
         for mtl in material_array:
-            f.write(struct.pack("I", MDL_MTL))
+            f.write(struct.pack("=I", MDL_MTL))
             self.write_string(f, mtl[0])
             self.write_string(f, mtl[1])
-            f.write(struct.pack("I", MDL_END))
-        f.write(struct.pack("I", MDL_END))
+            f.write(struct.pack("=I", MDL_END))
+        f.write(struct.pack("=I", MDL_END))
 
-        f.write(struct.pack("I", MDL_END))
+        f.write(struct.pack("=I", MDL_END))
     
     def write_mesh_block(self, f, mesh_array):
-        f.write(struct.pack("IIII", MDL_BLOCK, MDL_MESH, 0, 0))
+        f.write(struct.pack("=IIII", MDL_BLOCK, MDL_MESH, 0, 0))
 
-        f.write(struct.pack("IIII", MDL_LIST, MDL_MESH, len(mesh_array), 0))
+        f.write(struct.pack("=IIII", MDL_LIST, MDL_MESH, len(mesh_array), 0))
         for mesh in mesh_array:
-            f.write(struct.pack("I", MDL_MESH))
+            f.write(struct.pack("=I", MDL_MESH))
             self.write_string(f, mesh.name)
 
-            f.write(struct.pack("IIII", MDL_LIST, MDL_VERTEX, len(mesh.vertex_set), 0))
+            f.write(struct.pack("=IIII", MDL_LIST, MDL_VERTEX, len(mesh.vertex_set), 0))
             for vertex in mesh.vertex_set:
-                f.write(struct.pack("H", MDL_VERTEX))
-                f.write(struct.pack("3f3f2fBB4B4f", *vertex.position, *vertex.normal, *vertex.uv, vertex.node_index, vertex.bone_count, *vertex.bone_indices, *vertex.bone_weights))
-            f.write(struct.pack("I", MDL_END))
+                f.write(struct.pack("=H", MDL_VERTEX))
+                f.write(struct.pack("=3f3f2fBB4B4f", *vertex.position, *vertex.normal, *vertex.uv, vertex.node_index, vertex.bone_count, *vertex.bone_indices, *vertex.bone_weights))
+            f.write(struct.pack("=I", MDL_END))
 
-            f.write(struct.pack("IIII", MDL_LIST, MDL_INDEX, len(mesh.index_array), 0))
-            f.write(struct.pack("{}H".format(len(mesh.index_array)), *mesh.index_array))
-            f.write(struct.pack("I", MDL_END))
-        f.write(struct.pack("I", MDL_END))
+            f.write(struct.pack("=IIII", MDL_LIST, MDL_INDEX, len(mesh.index_array), 0))
+            f.write(struct.pack("={}H".format(len(mesh.index_array)), *mesh.index_array))
+            f.write(struct.pack("=I", MDL_END))
+        f.write(struct.pack("=I", MDL_END))
 
-        f.write(struct.pack("I", MDL_END))
+        f.write(struct.pack("=I", MDL_END))
 
     def write_file(self, data):
         f = open(self.filepath, "wb")
-        f.write(struct.pack("IIIIIIII", MDL_SIG, 1, 0, 0, 0, 0, 0, 0))
+        f.write(struct.pack("=IIIIIIII", MDL_SIG, 1, 0, 0, 0, 0, 0, 0))
         self.write_node_block(f, data.node_index.array)
         self.write_bone_block(f, data.bone_index.array)
         self.write_material_block(f, data.ambient_texture, data.diffuse_texture, data.specular_texture)
         self.write_mesh_block(f, data.mesh_array)
-        f.write(struct.pack("I", MDL_EOF))
+        f.write(struct.pack("=I", MDL_EOF))
         f.close()
 
     def process(self):
