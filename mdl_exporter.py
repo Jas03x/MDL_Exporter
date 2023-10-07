@@ -197,6 +197,8 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
             f.write(struct.pack("=IIII", MDL_LIST, MDL_INDEX, len(mesh.index_array), 0))
             f.write(struct.pack("={}H".format(len(mesh.index_array)), *mesh.index_array))
             f.write(struct.pack("=I", MDL_END))
+
+            f.write(struct.pack("=I", MDL_END))
         f.write(struct.pack("=I", MDL_END))
 
         f.write(struct.pack("=I", MDL_END))
