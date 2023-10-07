@@ -123,7 +123,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
             f.write(struct.pack("=BB", 0, 0))
         else:
             f.write(struct.pack("=B", len(str)))
-            f.write(struct.pack("={}s".format(len(str)), str.encode("utf-8")))
+            f.write(struct.pack("={}sB".format(len(str)), str.encode("utf-8"), 0))
         f.write(struct.pack("=I", MDL_END))
     
     def write_matrix(self, f, matrix):
