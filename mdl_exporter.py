@@ -287,8 +287,8 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
             mdl_mesh = MDL_Mesh(mesh.name)
             node_index = mdl_data.node_index.find(mesh.name)
             for face in mesh.polygons:
-                if face.loop_total != 3:
-                    raise Exception("mesh has non-triangular polygons")
+                if face.loop_total != 3 or face.loop_total != 4:
+                    raise Exception("mesh has unsupported polygons")
                 for i in range(face.loop_start, face.loop_start + face.loop_total):
                     n = mesh.loops[i].normal
                     v = mesh.vertices[mesh.loops[i].vertex_index]
