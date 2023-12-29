@@ -303,7 +303,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                     else:
                         vertex = MDL_Vertex(bind_shape_matrix @ v.co, n, uv_layer[i].uv, node_index)
                         for g in v.groups:
-                            if (mdl_data.bone_index.map.get(group.name, -1) != -1): # if this vertex group has a valid bone
+                            if (vertex_group_map[g.group] != -1): # if this vertex group has a valid bone
                                 vertex.bone_indices[vertex.bone_count] = vertex_group_map[g.group]
                                 vertex.bone_weights[vertex.bone_count] = g.weight
                                 vertex.bone_count += 1
