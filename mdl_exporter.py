@@ -282,13 +282,13 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
 
             vertex_group_map = [] # maps the group index to the bone index
             for group in bpy.data.objects[mesh.name].vertex_groups:
-                vertex_group_map.append(mdl_data.bone_index.find(group.name))
+                vertex_group_map.append(mdl_data.bone_index.map.get(group.name, -1))
 
             mdl_mesh = MDL_Mesh(mesh.name)
             node_index = mdl_data.node_index.find(mesh.name)
             for face in mesh.polygons:
-                if face.loop_total != 3 or face.loop_total != 4:
-                    raise Exception("mesh has unsupported polygons")
+                if face.loop_total != 3 and face.loop_total != 4:
+                    raise Exception("mesh has unsupported polygons (count={})".format(face.loop_total))
                 for i in range(face.loop_start, face.loop_start + face.loop_total):
                     n = mesh.loops[i].normal
                     v = mesh.vertices[mesh.loops[i].vertex_index]
@@ -303,9 +303,10 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                     else:
                         vertex = MDL_Vertex(bind_shape_matrix @ v.co, n, uv_layer[i].uv, node_index)
                         for g in v.groups:
-                            vertex.bone_indices[vertex.bone_count] = vertex_group_map[g.group]
-                            vertex.bone_weights[vertex.bone_count] = g.weight
-                            vertex.bone_count += 1
+                            if (mdl_data.bone_index.map.get(group.name, -1) != -1): # if this vertex group has a valid bone
+                                vertex.bone_indices[vertex.bone_count] = vertex_group_map[g.group]
+                                vertex.bone_weights[vertex.bone_count] = g.weight
+                                vertex.bone_count += 1
                     vertex.finalize()
 
                     index = mdl_mesh.vertex_map.get(vertex, -1)
