@@ -203,6 +203,8 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
             for polygon in mesh.polygon_array:
                 f.write(struct.pack("=HBB", MDL_POLYGON, polygon.index_count, 0))
                 f.write(struct.pack("={}H".format(polygon.index_count), *polygon.index_array))
+                if (polygon.index_count == 3): # if there are 3 indices, pad to 4
+                    f.write(struct.pack("=H", 0xFFFF))
             f.write(struct.pack("=I", MDL_END))
 
             f.write(struct.pack("=I", MDL_END))
