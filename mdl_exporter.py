@@ -201,7 +201,7 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
 
             f.write(struct.pack("=IIII", MDL_LIST, MDL_POLYGON, len(mesh.polygon_array), 0))
             for polygon in mesh.polygon_array:
-                f.write(struct.pack("=HH", MDL_POLYGON, polygon.index_count))
+                f.write(struct.pack("=HBB", MDL_POLYGON, polygon.index_count, 0))
                 f.write(struct.pack("={}H".format(polygon.index_count), *polygon.index_array))
             f.write(struct.pack("=I", MDL_END))
 
