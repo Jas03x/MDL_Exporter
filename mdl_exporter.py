@@ -24,13 +24,13 @@ MDL_EOF     = 0x00464F45 # 'EOF'
 MDL_LIST    = 0x5354494C # 'LIST'
 MDL_BLOCK   = 0x004B4C42 # 'BLK'
 MDL_VERTEX  = 0x00005856 # 'VX'
+MDL_POLYGON = 0x00004750 # 'PG'
 MDL_STRING  = 0x00525453 # 'STR'
 MDL_MATRIX4 = 0x0034584D # 'MX4'
 MDL_BONE    = 0x454E4F42 # 'BONE'
 MDL_NODE    = 0x45444F4E # 'NODE'
 MDL_MTL     = 0x004C544D # 'MTL'
 MDL_MESH    = 0x4853454D # 'MESH'
-MDL_INDEX   = 0x58444E49 # 'INDX'
 MDL_TEXTURE = 0x54584554 # 'TEXT'
 MDL_END     = 0x00444E45 # 'END'
 
@@ -63,6 +63,11 @@ class MDL_Vertex:
 
     def __hash__(self):
         return self.hash_value
+
+class MDL_Polygon:
+    def __init__(self):
+        self.index_count = 0
+        self.index_array = []
 
 class MDL_Node:
     def __init__(self, name, parent, transform):
@@ -100,7 +105,7 @@ class MDL_Mesh:
         self.name = name
         self.vertex_set = []
         self.vertex_map = {}
-        self.index_array = []
+        self.polygon_array = []
 
 class MDL_Model:
     def __init__(self):
@@ -194,8 +199,10 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                 f.write(struct.pack("=3f3f2fBB4B4f", *vertex.position, *vertex.normal, *vertex.uv, vertex.node_index, vertex.bone_count, *vertex.bone_indices, *vertex.bone_weights))
             f.write(struct.pack("=I", MDL_END))
 
-            f.write(struct.pack("=IIII", MDL_LIST, MDL_INDEX, len(mesh.index_array), 0))
-            f.write(struct.pack("={}H".format(len(mesh.index_array)), *mesh.index_array))
+            f.write(struct.pack("=IIII", MDL_LIST, MDL_POLYGON, len(mesh.polygon_array), 0))
+            for polygon in mesh.polygon_array:
+                f.write(struct.pack("=HH", MDL_POLYGON, polygon.index_count))
+                f.write(struct.pack("={}H".format(polygon.index_count), *polygon.index_array))
             f.write(struct.pack("=I", MDL_END))
 
             f.write(struct.pack("=I", MDL_END))
@@ -286,10 +293,12 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
 
             mdl_mesh = MDL_Mesh(mesh.name)
             node_index = mdl_data.node_index.find(mesh.name)
-            for face in mesh.polygons:
-                if face.loop_total != 3 and face.loop_total != 4:
-                    raise Exception("mesh has unsupported polygons (count={})".format(face.loop_total))
-                for i in range(face.loop_start, face.loop_start + face.loop_total):
+            for p in mesh.polygons:
+                if p.loop_total != 3 and p.loop_total != 4:
+                    raise Exception("mesh has unsupported polygons (count={})".format(p.loop_total))
+
+                polygon = MDL_Polygon()
+                for i in range(p.loop_start, p.loop_start + p.loop_total):
                     n = mesh.loops[i].normal
                     v = mesh.vertices[mesh.loops[i].vertex_index]
                     num_groups = len(v.groups)
@@ -314,7 +323,9 @@ class MDL_Exporter(bpy.types.Operator, ExportHelper):
                         index = len(mdl_mesh.vertex_set)
                         mdl_mesh.vertex_map[vertex] = index
                         mdl_mesh.vertex_set.append(vertex)
-                    mdl_mesh.index_array.append(index)
+                    polygon.index_count += 1
+                    polygon.index_array.append(index)
+                mdl_mesh.polygon_array.append(polygon)
             
             mdl_data.mesh_array.append(mdl_mesh)
             mesh.free_normals_split()
